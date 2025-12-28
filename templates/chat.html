@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fitness & Diet Coach</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- ── Header ── -->
+    <header class="chat-header">
+      <div class="header-left">
+        <div class="avatar-wrap">
+          <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="header-avatar" alt="Coach" />
+          <span class="online-dot"></span>
+        </div>
+        <div class="header-info">
+          <span class="header-title">Fitness &amp; Diet Coach</span>
+          <span class="header-subtitle">Your personal AI health companion</span>
+        </div>
+      </div>
+      <div class="header-badge">
+        <span class="badge-dot"></span>
+        <span class="badge-label">AI Powered</span>
+      </div>
+    </header>
+
+    <!-- ── Messages ── -->
+    <div class="messages" id="messages">
+
+      <!-- Welcome bubble -->
+      <div class="msg-row bot-row">
+        <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+        <div class="bubble bot-bubble">
+          <div class="md"><p><strong>Hey! I'm your Fitness &amp; Diet Coach.</strong></p><p>Ask me anything about workouts, nutrition, macros, or calories. I'm trained on curated fitness and nutrition books so you'll get real, evidence-based answers.</p></div>
+          <span class="msg-time">Now</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Typing Indicator ── -->
+    <div class="typing-row" id="typing-indicator">
+      <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+      <div class="bubble bot-bubble typing-bubble">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- ── Input Bar ── -->
+    <div class="input-area">
+      <form id="chat-form">
+        <input
+          type="text"
+          id="user-input"
+          name="msg"
+          placeholder="Ask your fitness coach…"
+          autocomplete="off"
+          required
+        />
+        <button type="submit" id="send-btn" aria-label="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M22 2L11 13" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+  </div>
+
+  <script>
+    marked.setOptions({ breaks: true, gfm: true });
+
+    function getTime() {
+      const d = new Date();
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    }
+
+    function scrollBottom() {
+      const el = document.getElementById('messages');
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function showTyping() {
+      const t = document.getElementById('typing-indicator');
+      t.style.display = 'flex';
+      scrollBottom();
+    }
+
+    function hideTyping() {
+      document.getElementById('typing-indicator').style.display = 'none';
+    }
+
+    $(document).ready(function () {
+      scrollBottom();
+
+      $('#chat-form').on('submit', function (e) {
+        e.preventDefault();
+
+        const text = $('#user-input').val().trim();
+        if (!text) return;
+
+        const time = getTime();
+
+        // User bubble
+        const userHtml = `
+          <div class="msg-row user-row">
+            <div class="bubble user-bubble">
+              ${$('<div>').text(text).html()}
+              <span class="msg-time">${time}</span>
+            </div>
+          </div>`;
+
+        $('#messages').append(userHtml);
+        $('#user-input').val('');
+        $('#send-btn').prop('disabled', true);
+        scrollBottom();
+        showTyping();
+
+        $.ajax({
+          data: { msg: text },
+          type: 'POST',
+          url: '/get',
+        })
+        .done(function (data) {
+          hideTyping();
+          const botHtml = `
+            <div class="msg-row bot-row">
+              <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+              <div class="bubble bot-bubble">
+                <div class="md">${marked.parse(data)}</div>
+                <span class="msg-time">${getTime()}</span>
+              </div>
+            </div>`;
+          $('#messages').append(botHtml);
+          scrollBottom();
+        })
+        .fail(function () {
+          hideTyping();
+          const errHtml = `
+            <div class="msg-row bot-row">
+              <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+              <div class="bubble bot-bubble error-bubble">
+                Something went wrong. Please try again.
+                <span class="msg-time">${getTime()}</span>
+              </div>
+            </div>`;
+          $('#messages').append(errHtml);
+          scrollBottom();
+        })
+        .always(function () {
+          $('#send-btn').prop('disabled', false);
+          $('#user-input').focus();
+        });
+      });
+    });
+  </script>
+
+</body>
+</html>
