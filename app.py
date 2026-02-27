@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from src.helper import download_hugging_face_embeddings
 from langchain_pinecone import PineconeVectorStore
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
@@ -16,15 +16,15 @@ app = Flask(__name__)
 load_dotenv()
 
 PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+GOOGLE_API_KEY=os.environ.get('GOOGLE_API_KEY')
 
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 
 embeddings = download_hugging_face_embeddings()
 
-index_name = "medical-chatbot" 
+index_name = "diet-fitness-chatbot"
 # Embed each chunk and upsert the embeddings into your Pinecone index.
 docsearch = PineconeVectorStore.from_existing_index(
     index_name=index_name,
@@ -34,9 +34,9 @@ docsearch = PineconeVectorStore.from_existing_index(
 
 
 
-retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
+retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":5})
 
-chatModel = ChatOpenAI(model="gpt-4o")
+chatModel = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.3)
 prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system_prompt),
@@ -59,9 +59,20 @@ def index():
 def chat():
     msg = request.form["msg"]
     input = msg
-    print(input)
+    print(f"\n{'='*50}")
+    print(f"Question: {input}")
     response = rag_chain.invoke({"input": msg})
-    print("Response : ", response["answer"])
+
+    # Print retrieved sources for verification
+    print(f"\nRetrieved {len(response['context'])} source chunks:")
+    for i, doc in enumerate(response['context'], 1):
+        source = doc.metadata.get('source', 'Unknown')
+        preview = doc.page_content[:100].replace('\n', ' ')
+        print(f"  {i}. {source}")
+        print(f"     Preview: {preview}...")
+
+    print(f"\nResponse: {response['answer']}")
+    print(f"{'='*50}\n")
     return str(response["answer"])
 
 

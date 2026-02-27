@@ -134,6 +134,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Data files (large PDFs - Pinecone index already populated, not needed in repo)
+data/*.pdf
+
 # Environments
 .env
 .envrc

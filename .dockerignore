@@ -1,0 +1,23 @@
+# Python environment
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Data files — not needed at runtime (Pinecone index already populated)
+data/
+
+# Development / local files
+.env
+.git/
+.github/
+.claude/
+research/
+
+# Windows artifacts
+nul
+
+# Docs
+*.md
