@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fitness & Diet Coach</title>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
@@ -36,9 +37,7 @@
       <div class="msg-row bot-row">
         <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
         <div class="bubble bot-bubble">
-          Hi! I'm your personal <strong>Fitness &amp; Diet Coach</strong> — powered by professional sports science textbooks.
-          <br /><br />
-          Ask me anything about <em>workouts, nutrition, calories, macros, recovery</em>, or weight management.
+          <div class="md">Hi! I'm your personal <strong>Fitness &amp; Diet Coach</strong>, powered by professional sports science textbooks.<br><br>Ask me anything about <em>workouts, nutrition, calories, macros, or recovery</em>.</div>
           <span class="msg-time">Now</span>
         </div>
       </div>
@@ -78,6 +77,8 @@
   </div>
 
   <script>
+    marked.setOptions({ breaks: true, gfm: true });
+
     function getTime() {
       const d = new Date();
       return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
@@ -135,7 +136,7 @@
             <div class="msg-row bot-row">
               <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
               <div class="bubble bot-bubble">
-                ${data}
+                <div class="md">${marked.parse(data)}</div>
                 <span class="msg-time">${getTime()}</span>
               </div>
             </div>`;

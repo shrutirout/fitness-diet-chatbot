@@ -393,12 +393,43 @@ html, body {
 }
 
 /* ════════════════════════════════════════════
-   Bubble content — style links, bold, em
+   Markdown rendered content inside bot bubble
    ════════════════════════════════════════════ */
-.bot-bubble strong { color: var(--accent); font-weight: 600; }
-.bot-bubble em     { opacity: 0.85; }
-.bot-bubble a      { color: var(--accent); text-decoration: none; }
-.bot-bubble a:hover{ text-decoration: underline; }
+.md { display: flex; flex-direction: column; gap: 10px; }
+
+.md p               { margin: 0; line-height: 1.65; }
+.md p + p           { margin-top: 2px; }
+
+.md strong          { color: var(--accent); font-weight: 600; }
+.md em              { opacity: 0.85; }
+
+.md h1, .md h2,
+.md h3, .md h4      { color: var(--text); font-weight: 600; margin: 4px 0 2px; letter-spacing: -0.2px; }
+.md h1              { font-size: 17px; }
+.md h2              { font-size: 16px; }
+.md h3              { font-size: 15px; color: var(--accent); }
+.md h4              { font-size: 14px; color: var(--text-2); }
+
+.md ul, .md ol      { padding-left: 20px; display: flex; flex-direction: column; gap: 5px; }
+.md li              { line-height: 1.6; }
+.md li::marker      { color: var(--accent); }
+
+.md hr              { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+.md code            { font-family: "SF Mono", "Fira Code", Menlo, monospace;
+                      font-size: 13px; background: var(--surface-3);
+                      padding: 2px 6px; border-radius: 5px; color: var(--accent); }
+
+.md pre             { background: var(--surface-3); border-radius: 10px;
+                      padding: 12px 14px; overflow-x: auto; }
+.md pre code        { background: none; padding: 0; font-size: 13px; color: var(--text); }
+
+.md a               { color: var(--accent); text-decoration: none; }
+.md a:hover         { text-decoration: underline; }
+
+/* first child inside .md should not have extra top margin */
+.md > *:first-child { margin-top: 0; }
+.md > *:last-child  { margin-bottom: 0; }
 
 /* ════════════════════════════════════════════
    Mobile adjustments
