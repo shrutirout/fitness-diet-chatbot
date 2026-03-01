@@ -25,7 +25,6 @@ os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 embeddings = download_hugging_face_embeddings()
 
 index_name = "diet-fitness-chatbot"
-# Embed each chunk and upsert the embeddings into your Pinecone index.
 docsearch = PineconeVectorStore.from_existing_index(
     index_name=index_name,
     embedding=embeddings

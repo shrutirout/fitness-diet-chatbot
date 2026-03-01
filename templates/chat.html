@@ -1,81 +1,167 @@
-<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css">
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-
 <!DOCTYPE html>
-<html>
-	<head>
-		<title>Chatbot</title>
-		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
-		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous">
-		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-		<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css')}}"/>
-	</head>
-	
-	
-	<body>
-		<div class="container-fluid h-100">
-			<div class="row justify-content-center h-100">		
-				<div class="col-md-8 col-xl-6 chat">
-					<div class="card">
-						<div class="card-header msg_head">
-							<div class="d-flex bd-highlight">
-								<div class="img_cont">
-									<img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="rounded-circle user_img">
-									<!-- <img src="https://www.prdistribution.com/spirit/uploads/pressreleases/2019/newsreleases/d83341deb75c4c4f6b113f27b1e42cd8-chatbot-florence-already-helps-thousands-of-patients-to-remember-their-medication.png" class="rounded-circle user_img"> -->
-									<span class="online_icon"></span>
-								</div>
-								<div class="user_info">
-									<span>Diet and Fitness Coach</span>
-									<p>Your Personal Fitness Advisor</p>
-								</div>
-							</div>
-						</div>
-						<div id="messageFormeight" class="card-body msg_card_body">
-							
-							
-						</div>
-						<div class="card-footer">
-							<form id="messageArea" class="input-group">
-                                <input type="text" id="text" name="msg" placeholder="Type your message..." autocomplete="off" class="form-control type_msg" required/>
-								<div class="input-group-append">
-									<button type="submit" id="send" class="input-group-text send_btn"><i class="fas fa-location-arrow"></i></button>
-								</div>
-							</form>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-		
-		<script>
-			$(document).ready(function() {
-				$("#messageArea").on("submit", function(event) {
-					const date = new Date();
-					const hour = date.getHours();
-					const minute = date.getMinutes();
-					const str_time = hour+":"+minute;
-					var rawText = $("#text").val();
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fitness & Diet Coach</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
 
-					var userHtml = '<div class="d-flex justify-content-end mb-4"><div class="msg_cotainer_send">' + rawText + '<span class="msg_time_send">'+ str_time + '</span></div><div class="img_cont_msg"><img src="https://i.ibb.co/d5b84Xw/Untitled-design.png" class="rounded-circle user_img_msg"></div></div>';
-					
-					$("#text").val("");
-					$("#messageFormeight").append(userHtml);
+  <div class="app">
 
-					$.ajax({
-						data: {
-							msg: rawText,	
-						},
-						type: "POST",
-						url: "/get",
-					}).done(function(data) {
-						var botHtml = '<div class="d-flex justify-content-start mb-4"><div class="img_cont_msg"><img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="rounded-circle user_img_msg"></div><div class="msg_cotainer">' + data + '<span class="msg_time">' + str_time + '</span></div></div>';
-						$("#messageFormeight").append($.parseHTML(botHtml));
-					});
-					event.preventDefault();
-				});
-			});
-		</script>
-        
-    </body>
+    <!-- ── Header ── -->
+    <header class="chat-header">
+      <div class="header-left">
+        <div class="avatar-wrap">
+          <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="header-avatar" alt="Coach" />
+          <span class="online-dot"></span>
+        </div>
+        <div class="header-info">
+          <span class="header-title">Fitness &amp; Diet Coach</span>
+          <span class="header-subtitle">Your personal AI health companion</span>
+        </div>
+      </div>
+      <div class="header-badge">
+        <span class="badge-dot"></span>
+        <span class="badge-label">AI Powered</span>
+      </div>
+    </header>
+
+    <!-- ── Messages ── -->
+    <div class="messages" id="messages">
+
+      <!-- Welcome bubble -->
+      <div class="msg-row bot-row">
+        <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+        <div class="bubble bot-bubble">
+          Hi! I'm your personal <strong>Fitness &amp; Diet Coach</strong> — powered by professional sports science textbooks.
+          <br /><br />
+          Ask me anything about <em>workouts, nutrition, calories, macros, recovery</em>, or weight management.
+          <span class="msg-time">Now</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Typing Indicator ── -->
+    <div class="typing-row" id="typing-indicator">
+      <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+      <div class="bubble bot-bubble typing-bubble">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- ── Input Bar ── -->
+    <div class="input-area">
+      <form id="chat-form">
+        <input
+          type="text"
+          id="user-input"
+          name="msg"
+          placeholder="Ask your fitness coach…"
+          autocomplete="off"
+          required
+        />
+        <button type="submit" id="send-btn" aria-label="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M22 2L11 13" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+  </div>
+
+  <script>
+    function getTime() {
+      const d = new Date();
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    }
+
+    function scrollBottom() {
+      const el = document.getElementById('messages');
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function showTyping() {
+      const t = document.getElementById('typing-indicator');
+      t.style.display = 'flex';
+      scrollBottom();
+    }
+
+    function hideTyping() {
+      document.getElementById('typing-indicator').style.display = 'none';
+    }
+
+    $(document).ready(function () {
+      scrollBottom();
+
+      $('#chat-form').on('submit', function (e) {
+        e.preventDefault();
+
+        const text = $('#user-input').val().trim();
+        if (!text) return;
+
+        const time = getTime();
+
+        // User bubble
+        const userHtml = `
+          <div class="msg-row user-row">
+            <div class="bubble user-bubble">
+              ${$('<div>').text(text).html()}
+              <span class="msg-time">${time}</span>
+            </div>
+          </div>`;
+
+        $('#messages').append(userHtml);
+        $('#user-input').val('');
+        $('#send-btn').prop('disabled', true);
+        scrollBottom();
+        showTyping();
+
+        $.ajax({
+          data: { msg: text },
+          type: 'POST',
+          url: '/get',
+        })
+        .done(function (data) {
+          hideTyping();
+          const botHtml = `
+            <div class="msg-row bot-row">
+              <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+              <div class="bubble bot-bubble">
+                ${data}
+                <span class="msg-time">${getTime()}</span>
+              </div>
+            </div>`;
+          $('#messages').append(botHtml);
+          scrollBottom();
+        })
+        .fail(function () {
+          hideTyping();
+          const errHtml = `
+            <div class="msg-row bot-row">
+              <img src="https://cdn-icons-png.flaticon.com/512/387/387569.png" class="msg-avatar" alt="Coach" />
+              <div class="bubble bot-bubble error-bubble">
+                Something went wrong. Please try again.
+                <span class="msg-time">${getTime()}</span>
+              </div>
+            </div>`;
+          $('#messages').append(errHtml);
+          scrollBottom();
+        })
+        .always(function () {
+          $('#send-btn').prop('disabled', false);
+          $('#user-input').focus();
+        });
+      });
+    });
+  </script>
+
+</body>
 </html>
