@@ -509,58 +509,86 @@ app.run(host="0.0.0.0", port=8080, debug=True)
 
 **File: `templates/chat.html`** + **`static/style.css`**
 
-The frontend is a **single-page application** built with vanilla Bootstrap 4 and jQuery. There is no React, no Vue — deliberately kept simple.
+The frontend is a **single-page application** built with pure CSS and jQuery — no Bootstrap, no React, no external UI framework. Deliberately minimal: the backend is the complexity, the frontend just needs to be clean and fast.
+
+### Design System — Apple Dark Theme
+
+The UI uses a CSS variable-based design token system inspired by Apple's dark palette:
+
+```css
+:root {
+  --bg:           #000000;
+  --surface:      #1C1C1E;   /* iOS card background */
+  --surface-2:    #2C2C2E;   /* Bot bubble background */
+  --accent:       #30D158;   /* Apple system green */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", ...
+}
+```
+
+Every colour, spacing, and radius references a variable — changing the theme requires editing only the `:root` block.
 
 ### Structure
 
 ```
-Bootstrap card (.card)
-├── Card header (.card-header)
-│   ├── Bot avatar image (flaticon fitness icon)
-│   ├── Green online dot (.online_icon)
-│   └── "Diet and Fitness Coach" / "Your Personal Fitness Advisor"
-├── Card body (.msg_card_body) — scrollable conversation area
-│   ├── User messages: right-aligned green bubbles (.msg_cotainer_send)
-│   └── Bot messages: left-aligned blue bubbles (.msg_cotainer)
-└── Card footer — input form
-    ├── Text input (#text, name="msg")
-    └── Submit button (Font Awesome arrow icon)
+.app (flex column, max-width 700px, centered)
+├── .chat-header (frosted glass, backdrop-filter: blur(24px))
+│   ├── avatar + online dot (animated pulse)
+│   ├── "Fitness & Diet Coach" title + subtitle
+│   └── "AI Powered" badge (top right)
+├── .messages (flex column, scrollable, gap: 18px)
+│   ├── .bot-row: left-aligned, avatar + dark bubble
+│   └── .user-row: right-aligned, green accent bubble
+├── #typing-indicator (3 bouncing dots, hidden by default)
+└── .input-area (frosted glass bar, pill-shaped input)
+    └── #send-btn (circular green button, disabled while waiting)
 ```
+
+### Markdown Rendering
+
+Bot responses from Gemini are markdown. The UI uses `marked.js` to render them:
+
+```javascript
+marked.setOptions({ breaks: true, gfm: true });
+// In the AJAX done handler:
+<div class="md">${marked.parse(data)}</div>
+```
+
+The `.md` CSS class styles all markdown elements — headings, bold text, bullet lists, code blocks, horizontal rules — within the bot bubble, so structured answers display correctly.
 
 ### AJAX Communication
 
 ```javascript
-$("#messageArea").on("submit", function(event) {
-    var rawText = $("#text").val();
+$('#chat-form').on('submit', function(e) {
+    e.preventDefault();
+    const text = $('#user-input').val().trim();
 
-    // Immediately render user bubble (optimistic UI)
-    var userHtml = '<div class="d-flex justify-content-end mb-4">...' + rawText + '...</div>';
-    $("#messageFormeight").append(userHtml);
-    $("#text").val("");  // Clear input immediately
+    // Append user bubble immediately (optimistic UI)
+    $('#messages').append(userHtml);
+    $('#send-btn').prop('disabled', true);  // Prevent double-send
+    showTyping();                            // Show bouncing dots
 
-    $.ajax({
-        data: { msg: rawText },
-        type: "POST",
-        url: "/get",
-    }).done(function(data) {
-        // Render bot bubble when response arrives
-        var botHtml = '<div class="d-flex justify-content-start mb-4">...' + data + '...</div>';
-        $("#messageFormeight").append($.parseHTML(botHtml));
+    $.ajax({ data: { msg: text }, type: 'POST', url: '/get' })
+    .done(function(data) {
+        hideTyping();
+        $('#messages').append(`<div class="md">${marked.parse(data)}</div>`);
+    })
+    .fail(function() {
+        hideTyping();
+        // Render red error bubble
+    })
+    .always(function() {
+        $('#send-btn').prop('disabled', false);
     });
-
-    event.preventDefault();  // Prevent default form submit (page reload)
 });
 ```
 
 **Key design decisions**:
-- **`event.preventDefault()`**: Stops the browser from doing a full-page form POST. All communication is via AJAX.
-- **Optimistic UI**: The user's message bubble is appended immediately, before the server responds. This gives a snappy feel.
-- **`$.parseHTML(botHtml)`**: jQuery's `$.parseHTML()` sanitizes the HTML string before appending — slightly safer than `.append(botHtml)` directly with raw HTML.
-- **`url_for('static', filename='style.css')`**: Flask's `url_for` generates the correct URL for static files regardless of where the app is mounted, making it deployment-agnostic.
-
-### Styling
-
-Dark-themed gradient: `rgb(38,51,61)` to `rgb(33,33,78)` — navy/dark blue palette appropriate for a health-tech aesthetic.
+- **`e.preventDefault()`**: Stops the browser from doing a full-page form POST.
+- **Optimistic UI**: User bubble appended before server responds — snappy feel.
+- **Send button disabled during request**: Prevents sending duplicate messages while waiting.
+- **Typing indicator**: Three bouncing dots shown while the RAG chain runs (can take 2-5 seconds). The middle dot turns green at the bounce peak.
+- **Error bubble**: If the AJAX call fails, a red-tinted bubble appears instead of nothing.
+- **`marked.parse(data)`**: Converts Gemini's markdown output to HTML so bullet lists, bold text, and headers render properly.
 
 ---
 
@@ -629,70 +657,99 @@ docker run -d \
 
 ---
 
-## 11. CI/CD Pipeline — GitHub Actions + AWS
+## 11. CI/CD Pipeline — GitHub Actions + AWS EC2
 
 **File: `.github/workflows/cicd.yaml`**
 
-The pipeline has two jobs that run sequentially:
+The pipeline uses a single job that SSHs into the EC2 instance and redeploys the app — no Docker build, no ECR, no self-hosted runner required.
 
-### Job 1: Continuous-Integration (runs on GitHub's ubuntu-latest runner)
-
-```yaml
-- name: Checkout
-  uses: actions/checkout@v2
-
-- name: Configure AWS credentials
-  uses: aws-actions/configure-aws-credentials@v1
-  with:
-    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
-
-- name: Login to Amazon ECR
-  id: login-ecr
-  uses: aws-actions/amazon-ecr-login@v1
-
-- name: Build, tag, and push image to Amazon ECR
-  run: |
-    docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-    docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-```
-
-**What happens**:
-1. Checkout the repository code onto the GitHub Actions runner machine.
-2. Use the stored AWS credentials (GitHub Secrets) to authenticate with AWS.
-3. Log in to Amazon ECR (Elastic Container Registry) — AWS's private Docker registry.
-4. Build the Docker image from the `Dockerfile`, tag it as `latest`, and push it to ECR.
-
-**Amazon ECR**: A private Docker image registry hosted on AWS. Like Docker Hub but private and integrated with IAM. This is where the built image lives, ready to be pulled by EC2.
-
-### Job 2: Continuous-Deployment (runs on self-hosted runner — your EC2 instance)
+### The Full Pipeline
 
 ```yaml
-needs: Continuous-Integration  # only runs after CI succeeds
+name: Deploy to EC2
 
-- name: Run Docker Image to serve users
-  run: |
-    docker run -d \
-      -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
-      -e PINECONE_API_KEY="${{ secrets.PINECONE_API_KEY }}" \
-      -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-      -p 8080:8080 \
-      "${{ steps.login-ecr.outputs.registry }}"/"${{ secrets.ECR_REPO }}":latest
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into EC2 and redeploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/ubuntu/fitness-diet-chatbot
+            git pull origin main
+            source venv/bin/activate
+            pip install -r requirements.txt -q
+            sudo systemctl restart fitness-chatbot
+            echo "deployed"
 ```
 
-**What happens**:
-1. The GitHub Actions runner on EC2 (a process you install and register) receives the job.
-2. It pulls the newly pushed Docker image from ECR.
-3. It runs the container on port 8080 with the API keys injected as environment variables.
+### What happens on every push to `main`
 
-**Self-hosted runner**: You install the GitHub Actions runner software on your EC2 instance. This runner registers with GitHub and waits for jobs tagged `runs-on: self-hosted`. When a job arrives, the EC2 machine executes it locally — giving you access to the real EC2 environment.
+1. GitHub Actions spins up a free `ubuntu-latest` cloud runner.
+2. `appleboy/ssh-action` establishes an SSH connection to the EC2 instance using the private key stored in GitHub Secrets.
+3. The script runs on EC2:
+   - `git pull origin main` — fetches and applies the latest code changes.
+   - `source venv/bin/activate` — activates the Python virtual environment.
+   - `pip install -r requirements.txt -q` — installs any new dependencies (no-op if requirements unchanged).
+   - `sudo systemctl restart fitness-chatbot` — tells systemd to stop the running app and start the updated version.
+4. SSH connection closes. App is now running new code.
 
-**Why this pattern** (CI on GitHub cloud, CD on self-hosted):
-- The build (CI) runs on GitHub's free cloud runners — no cost to you.
-- The deployment (CD) runs on EC2 — the runner can pull from ECR and run Docker with low latency since they're in the same AWS account.
+### Why SSH + systemd instead of Docker + ECR
 
-**Known issue in the pipeline**: The deployment step passes `OPENAI_API_KEY` but the application uses `GOOGLE_API_KEY`. The deployed container would fail to initialize the Gemini model because `GOOGLE_API_KEY` is never set. This needs to be fixed by changing `OPENAI_API_KEY` to `GOOGLE_API_KEY` in both the `cicd.yaml` and GitHub Secrets.
+An ECR-based pipeline requires: building a Docker image, pushing to ECR (storage cost + transfer time), pulling on EC2, running the container. For a Python app without complex system dependencies this is unnecessary overhead.
+
+The SSH approach is simpler: no Docker build, no container registry, no ECR costs. Deployment takes under 30 seconds. The trade-off is no image versioning — to roll back you `git revert` and push.
+
+### Why systemd manages the process
+
+Early attempts used `nohup python3 app.py &` to keep the process alive after SSH disconnects. This consistently failed with exit code 143 (SIGTERM) — the appleboy/ssh-action's Docker container received SIGTERM every time the SSH session ended, even with `nohup`, `disown`, and subshell approaches.
+
+The root cause: background processes started within an SSH session can remain attached to the session's process group. When SSH closes, the OS sends SIGTERM to the group.
+
+systemd solves this definitively. The app process is owned by systemd, not by any SSH session. `sudo systemctl restart fitness-chatbot` hands control to systemd and returns immediately — nothing dangles in the SSH session.
+
+**Additional benefits of systemd**:
+- `Restart=always` automatically restarts the app if it crashes.
+- App starts on EC2 reboot (`systemctl enable`).
+- Logs available via `journalctl -u fitness-chatbot`.
+
+### systemd Service File
+
+`/etc/systemd/system/fitness-chatbot.service`:
+
+```ini
+[Unit]
+Description=Fitness Diet Chatbot
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/fitness-diet-chatbot
+EnvironmentFile=/home/ubuntu/fitness-diet-chatbot/.env
+ExecStart=/home/ubuntu/fitness-diet-chatbot/venv/bin/python3 app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### GitHub Secrets Required
+
+| Secret | Value |
+|---|---|
+| `EC2_HOST` | `35.173.100.45` (Elastic IP — permanent) |
+| `SSH_PRIVATE_KEY` | Full contents of the `.pem` key file |
+| `PINECONE_API_KEY` | Pinecone API key |
+| `GOOGLE_API_KEY` | Google AI Studio API key |
 
 ---
 
@@ -721,6 +778,29 @@ needs: Continuous-Integration  # only runs after CI succeeds
 ### Challenge 6: Port Binding in Docker
 **Problem**: Flask defaults to `127.0.0.1` which means only local loopback — unreachable from outside the container.
 **Solution**: `app.run(host="0.0.0.0")` binds to all interfaces, making Flask reachable on the container's published port.
+
+### Challenge 7: EC2 Disk Space — Out of Space During pip install
+**Problem**: The default EC2 instance comes with 8GB of EBS storage. During `pip install -r requirements.txt`, the installation failed mid-way with `OSError: [Errno 28] No space left on device`. The OS + Python + partial packages had consumed the entire 8GB.
+**Solution**: AWS free tier allows up to 30GB of EBS storage. Expanded the volume to 20GB via the AWS Console (EC2 → Volumes → Modify Volume), then resized the filesystem on the instance:
+```bash
+sudo growpart /dev/nvme0n1 1
+sudo resize2fs /dev/nvme0n1p1
+```
+Also used `pip install --no-cache-dir` to prevent pip from caching downloaded packages, further reducing disk usage.
+
+### Challenge 8: EC2 SSH Connection Timeout
+**Problem**: After launching the EC2 instance with port 22 open in the security group, direct SSH from a local machine timed out consistently. The security group was correctly configured (confirmed visually), so the firewall was not the issue.
+**Solution**: Diagnosed the problem using AWS EC2 Instance Connect (browser-based SSH in the AWS console), which bypassed the local network entirely and connected successfully. The root cause was the local ISP blocking outbound port 22. All EC2 setup was done via EC2 Instance Connect. The CI/CD pipeline's SSH (via GitHub Actions' cloud infrastructure) works fine since it originates from GitHub's servers, not the local network.
+
+### Challenge 9: Background Process Killed on SSH Disconnect (exit code 143)
+**Problem**: The CI/CD script started the app with `nohup python3 app.py &`, but the GitHub Actions pipeline reported exit code 143 (SIGTERM) on every deploy. Even `disown` and subshell approaches (`(nohup ... &)`) failed.
+**Root cause**: Background processes started within an SSH session can remain in the session's process group. When the SSH action's Docker container closes the connection, the OS sends SIGTERM to the process group — the action container itself received this signal.
+**Solution**: Replaced the `nohup` approach with systemd. The app is now a managed systemd service. CI/CD runs `sudo systemctl restart fitness-chatbot` — systemd handles the process completely outside any SSH session. The pipeline now exits cleanly with code 0.
+
+### Challenge 10: VPC Subnet Missing Internet Gateway Route
+**Problem**: Although the EC2 instance had a public IP and the security group allowed all traffic, the EC2 Instance Connect initially showed the instance as unreachable.
+**Diagnosis**: Checked VPC → Route Tables for the subnet. The route table had only a local VPC route (`172.31.0.0/16 → local`) with no `0.0.0.0/0 → igw-xxx` route. Without an Internet Gateway route, the subnet is effectively private — no internet connectivity despite the public IP.
+**Solution**: Added a `0.0.0.0/0 → igw-xxxxxxxxx` route to the route table. The Internet Gateway already existed and was attached to the VPC — it just needed a route entry.
 
 ---
 
@@ -892,32 +972,34 @@ A potential improvement: Use multi-stage builds and a `.dockerignore` file to ex
 
 When you push code to the `main` branch on GitHub:
 
-1. **GitHub Actions triggers**: The workflow in `.github/workflows/cicd.yaml` starts.
+1. **GitHub Actions triggers**: The workflow in `.github/workflows/cicd.yaml` starts on GitHub's free cloud runner.
 
-2. **CI Job** (on GitHub's cloud runner):
-   - Checks out the code.
-   - Authenticates with AWS using secrets stored in GitHub (never in code).
-   - Logs in to Amazon ECR (Elastic Container Registry — AWS's Docker registry).
-   - Builds the Docker image: `docker build -t <ecr-url>/<repo>:latest .`
-   - Pushes the image to ECR: `docker push <ecr-url>/<repo>:latest`
+2. **The deploy job**:
+   - Uses `appleboy/ssh-action` to establish an SSH connection to the EC2 instance using a private key stored in GitHub Secrets.
+   - Runs this script on EC2:
+     ```bash
+     cd /home/ubuntu/fitness-diet-chatbot
+     git pull origin main
+     source venv/bin/activate
+     pip install -r requirements.txt -q
+     sudo systemctl restart fitness-chatbot
+     echo "deployed"
+     ```
+   - `git pull` applies the latest code. `systemctl restart` tells the OS-level process manager to restart the app with the new code.
 
-3. **CD Job** (on self-hosted runner — your EC2 instance):
-   - The EC2 machine runs the GitHub Actions runner agent, waiting for jobs.
-   - After CI succeeds (`needs: Continuous-Integration`), the CD job starts.
-   - EC2 authenticates with ECR and pulls the latest Docker image.
-   - Runs the container: `docker run -d -p 8080:8080 -e PINECONE_API_KEY=... -e GOOGLE_API_KEY=...`
+3. SSH disconnects. The app is running the updated version. Total time: under 30 seconds.
 
-The result: every push to `main` automatically rebuilds and redeploys the latest version of the app on EC2, with no manual steps.
+This is simpler than a Docker + ECR pipeline — no image builds, no container registry, no self-hosted runner to maintain.
 
 ---
 
 **Q15: What are GitHub Secrets and why are they used?**
 
-GitHub Secrets are encrypted variables stored at the repository level. They are injected as environment variables into GitHub Actions workflows at runtime, never visible in logs or in the code.
+GitHub Secrets are encrypted variables stored at the repository level. They are injected as environment variables into GitHub Actions workflows at runtime — never visible in logs (automatically masked), never visible to anyone viewing the repository.
 
-We store: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`, `PINECONE_API_KEY`, `GOOGLE_API_KEY`, and `ECR_REPO`.
+We store: `EC2_HOST` (the Elastic IP), `SSH_PRIVATE_KEY` (full `.pem` file contents), `PINECONE_API_KEY`, and `GOOGLE_API_KEY`.
 
-This is the correct way to handle credentials in CI/CD. The alternatives (hardcoding in YAML, committing `.env`) are security vulnerabilities — anyone with access to the repo can see those credentials.
+This is the correct way to handle credentials in CI/CD. The alternatives (hardcoding in YAML, committing `.env`) are security vulnerabilities — anyone with repo access can see those credentials. A `.env` was accidentally committed to git early in this project, which is why those keys were rotated.
 
 ---
 
@@ -935,11 +1017,7 @@ This is the correct way to handle credentials in CI/CD. The alternatives (hardco
 
 5. **Async Flask with async Pinecone/LLM calls**: The current setup is synchronous — one request blocks one thread. With `asyncio` and `flask[async]`, multiple users could be served concurrently.
 
-6. **`.dockerignore`**: Exclude `venv/`, `data/`, `.git/`, `.claude/` from the Docker image. Currently the 171 MB of PDFs and the local virtualenv are copied into the image unnecessarily.
-
-7. **Fix CI/CD `OPENAI_API_KEY` → `GOOGLE_API_KEY`**: The current pipeline would deploy a broken container.
-
-8. **Rotate leaked API keys**: The `.env` with real Pinecone and Google keys was committed to git. Those keys need to be rotated immediately.
+6. **Source citation in the UI**: Currently the retrieved book sources are logged server-side only. Surfacing them in the chat bubble ("Source: The Complete Guide to Sports Nutrition, p.47") would build user trust.
 
 ---
 
@@ -1056,15 +1134,22 @@ The lesson: **RAG quality is bottlenecked by chunking quality**. You can't fix b
 
 **Q24: What went wrong in your project that you had to fix?**
 
-Two concrete issues:
+Several concrete issues across the RAG pipeline and deployment:
 
-**Issue 1 — Metadata bloat causing slow indexing**: When I first ran `store_index.py`, upserting to Pinecone was extremely slow. I investigated and found that PyPDFLoader attaches a lot of metadata per page — file stats, page numbers, author info embedded in the PDF. Each record upserted to Pinecone carried ~500 bytes of metadata. Across thousands of chunks from 5 books, this inflated the payload significantly.
+**Issue 1 — Metadata bloat causing slow indexing**: When I first ran `store_index.py`, upserting to Pinecone was extremely slow. PyPDFLoader attaches extensive metadata per page — file stats, page numbers, author info. Each Pinecone record carried ~500 bytes of metadata across thousands of chunks.
+Fix: wrote `filter_to_minimal_docs()` to strip everything except the source filename. Reduced metadata per record to ~50 bytes.
 
-I solved this by writing `filter_to_minimal_docs()` — a function that creates new Document objects from scratch, keeping only the `source` filename in metadata. This reduced metadata per record to ~50 bytes and made ingestion substantially faster.
+**Issue 2 — EC2 disk space exhausted mid-install**: The default EC2 8GB EBS volume was fully consumed during `pip install`. sentence-transformers and its transitive dependencies are large. The install failed with `OSError: [Errno 28] No space left on device`.
+Fix: expanded the EBS volume to 20GB via the AWS Console, then resized the filesystem with `growpart` and `resize2fs`. Also added `--no-cache-dir` to pip install to prevent caching.
 
-**Issue 2 — Docker container unreachable**: When I first deployed the container, navigating to the EC2's public IP on port 8080 gave a connection refused error. The container was running (confirmed via `docker ps`) but Flask wasn't accepting connections.
+**Issue 3 — SSH connection timeout from local machine**: SSH to the EC2 public IP consistently timed out from my local network despite the security group correctly allowing port 22. The issue was the local ISP blocking outbound SSH.
+Fix: used AWS EC2 Instance Connect (browser-based terminal in the AWS Console) to access the instance. All server setup was done via this browser shell. The CI/CD pipeline's SSH works fine since it originates from GitHub's cloud infrastructure.
 
-The issue was Flask's default bind address. Flask binds to `127.0.0.1` by default — loopback only, unreachable from outside the container. Fixing `app.run(host="0.0.0.0")` immediately resolved it. This is a classic containerization mistake.
+**Issue 4 — VPC subnet had no Internet Gateway route**: Even with a public IP and open security group, the EC2 instance was not reachable. The route table for the subnet only had a local VPC route with no `0.0.0.0/0 → igw-xxx` entry.
+Fix: added the Internet Gateway route to the VPC route table. The IGW existed and was attached — it just needed a routing entry.
+
+**Issue 5 — CI/CD pipeline reporting exit code 143 on every deploy**: Using `nohup python3 app.py &` in the SSH deploy script kept failing with SIGTERM. Even `disown` and subshell approaches failed. The appleboy/ssh-action Docker container received SIGTERM when the SSH session closed, regardless of how the process was backgrounded.
+Fix: replaced the nohup approach with systemd. The app is now a managed service (`fitness-chatbot.service`). CI/CD just calls `sudo systemctl restart fitness-chatbot` — systemd owns the process, completely outside the SSH session. Pipeline now exits cleanly.
 
 ---
 
