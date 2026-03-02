@@ -21,7 +21,7 @@ jobs:
             git pull origin main
             source venv/bin/activate
             pip install -r requirements.txt -q
-            pkill -f "python app.py" || true
+            pkill -f "python3 app.py" || true
             sleep 1
-            (nohup python app.py > app.log 2>&1 &)
+            nohup python3 app.py < /dev/null > app.log 2>&1 &
             echo "deployed"
