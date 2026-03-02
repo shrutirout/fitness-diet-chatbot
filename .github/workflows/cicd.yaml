@@ -23,6 +23,5 @@ jobs:
             pip install -r requirements.txt -q
             pkill -f "python app.py" || true
             sleep 1
-            nohup python app.py > app.log 2>&1 &
-            disown
+            (nohup python app.py > app.log 2>&1 &)
             echo "deployed"
