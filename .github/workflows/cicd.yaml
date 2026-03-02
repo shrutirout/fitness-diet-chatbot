@@ -22,5 +22,7 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt -q
             pkill -f "python app.py" || true
+            sleep 1
             nohup python app.py > app.log 2>&1 &
+            disown
             echo "deployed"
