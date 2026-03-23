@@ -1,6 +1,7 @@
 # Fitness and Diet Chatbot
 
 A RAG-based chatbot that answers fitness and nutrition questions using content from 5 professional textbooks as its knowledge base.
+Project is live and deployed at : http://35.173.100.45:8080/
 
 ## How it works
 
